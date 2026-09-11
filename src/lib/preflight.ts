@@ -29,24 +29,45 @@ export interface HealthReport {
 let cached: { report: HealthReport; at: number } | null = null;
 const CACHE_MS = 60_000;
 
-async function checkBrowser(): Promise<HealthCheck> {
+/**
+ * Which browser will actually drive the agents?
+ *
+ * `getBrowser()` prefers the user's dedicated Chrome over CDP and only falls
+ * back to Playwright's headless Chromium when that Chrome is absent. The old
+ * check ignored that order and launched Chromium unconditionally: on an
+ * end-user PC (installer, no `playwright install`) it showed a critical
+ * "Chromium non installé" while every agent was happily running in Chrome.
+ * Chromium is now only probed — and only critical — when Chrome is missing.
+ */
+async function checkBrowser(cdpOk: boolean): Promise<HealthCheck> {
+  const name = "Navigateur des agents";
+  if (cdpOk) {
+    return {
+      name,
+      ok: true,
+      detail: "Chrome dédié connecté — c'est lui qui pilote les agents (Chromium de secours non requis)",
+      critical: false,
+    };
+  }
   try {
     const browser = await chromium.launch({ headless: true });
     await browser.close();
     return {
-      name: "Navigateur (Playwright/Chromium)",
+      name,
       ok: true,
-      detail: "Chromium disponible",
-      critical: true,
+      // Usable, but blind: no Spotify/Instagram session → the Chrome check
+      // below says what is lost.
+      detail: "Chrome dédié absent — repli sur Chromium headless (sans session Spotify ni Instagram)",
+      critical: false,
     };
   } catch (e) {
     const msg = (e as Error).message.split("\n")[0];
     const missing = /Executable doesn't exist/i.test(msg);
     return {
-      name: "Navigateur (Playwright/Chromium)",
+      name,
       ok: false,
       detail: missing
-        ? "Chromium non installé → agents Spotify et Google HORS SERVICE. Lancer : npx playwright install chromium"
+        ? "Aucun navigateur : ni Chrome dédié, ni Chromium → agents Spotify, Google et Instagram HORS SERVICE. Relance le raccourci Genius Scout (Chrome), ou installe le secours : npx playwright install chromium"
         : msg,
       critical: true,
     };
@@ -233,7 +254,7 @@ export async function checkHealth(force = false): Promise<HealthReport> {
   const curlCheck = await checkCurl();
   const chromeCheck = await checkChromeSession(curlCheck.ok);
   const checks: HealthCheck[] = [
-    await checkBrowser(),
+    await checkBrowser(chromeCheck.ok),
     checkSpotify(),
     chromeCheck,
     await checkSpotifyLogin(chromeCheck.ok),
