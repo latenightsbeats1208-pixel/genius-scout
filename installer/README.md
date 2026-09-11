@@ -43,6 +43,12 @@ ou `Program Files`).
 3. **Complément du runtime Next** (`next/dist/{lib,shared,server,client}`) et
    vérification du binaire natif `better-sqlite3` (recopié depuis
    `node_modules` avec `bindings` et `file-uri-to-path` s'il manquait).
+   **Piège propre à Next 16 / Turbopack** : les paquets externes
+   (`better-sqlite3`, `playwright`) sont référencés par des noms hachés
+   (`better-sqlite3-<hash>`) résolus via `.next/standalone/.next/node_modules/`,
+   qui ne contient que des **liens symboliques absolus** vers le `node_modules`
+   du poste de build — morts une fois installés ailleurs. `copyDir` les
+   matérialise en copies réelles (sans `src/`, `deps/`, `docs/`).
 4. **Réécriture des chemins absolus** du poste de build inscrits dans
    `.next/server` (trois encodages) vers `C:\GeniusScout\build`.
 5. Écriture de `app/start.js`, `GeniusScout.bat`, `server.bat`,
@@ -59,6 +65,11 @@ ou `Program Files`).
    `/history`, `/contacts`, `/api/history`, `/api/scan/running`, `/api/health`
    et vérifie que `scans.db` a bien été créée. Le port CDP est neutralisé
    (`GENIUS_CDP_PORT=1`) : le Chrome dédié de l'opérateur n'est jamais touché.
+   Si 3033 répond déjà (serveur de dev), le test bascule sur 3933+ — le test
+   par `listen` ne suffit pas sous Windows, un `bind` sur 127.0.0.1 réussit
+   même quand un autre serveur écoute sur 0.0.0.0. `SYSTEMROOT`/`WINDIR` ne
+   sont pas réécrits dans l'environnement du fils : Node 24 refuse de démarrer
+   (assertion `ncrypto::CSPRNG`) si leur valeur diffère de celle du système.
 8. **Inno Setup** (`GeniusScout.iss`, lzma2/solid) → `installer/output/`.
 
 ## Contenu du paquet

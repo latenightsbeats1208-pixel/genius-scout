@@ -21,13 +21,15 @@
 //     app/                sortie « standalone » de Next + .next/static + public
 //       start.js          charge %USERPROFILE%\GeniusScoutData\.env puis server.js
 //
-// Les trois pièges du packaging Next « standalone », traités ici :
+// Les pièges du packaging Next « standalone », traités ici :
 //  1. la sortie standalone recopie .env et tout ce que le traceur croise (ici :
 //     le projet ENTIER, dist/ et legacy/ compris) → copie SÉLECTIVE, jamais brute ;
 //  2. les chemins absolus du poste de build inscrits dans .next/server → réécrits
 //     uniformément vers une racine neutre ;
 //  3. les modules internes de Next ratés par le traceur → sous-arbres
-//     next/dist/{lib,shared,server,client} complétés.
+//     next/dist/{lib,shared,server,client} complétés ;
+//  4. (Next 16 / Turbopack) les paquets externes sont des LIENS SYMBOLIQUES
+//     absolus dans .next/node_modules/<paquet>-<hash> → matérialisés en copies.
 //
 // Le contrôle anti-fuite est un VERROU : un seul terme personnel (identité,
 // chemin du poste, secret de .env.local) dans la charge utile = pas d'installeur.
@@ -723,12 +725,11 @@ async function smokeTest(port) {
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
     env: {
-      // En MAJUSCULES : le CSPRNG d'OpenSSL (Node 24) lit « SYSTEMROOT » tel
-      // quel dans le bloc d'environnement du fils et s'arrête net (assertion
-      // ncrypto::CSPRNG) si la clé est écrite « SystemRoot ».
-      SYSTEMROOT: winDir,
-      WINDIR: winDir,
-      SYSTEMDRIVE: winDir.slice(0, 2),
+      // SYSTEMROOT / WINDIR / SYSTEMDRIVE ne sont PAS posés ici : libuv les
+      // recopie depuis le parent quand ils manquent. Les écrire à la main
+      // (« C:\Windows » au lieu du « C:\WINDOWS » réel du système) fait
+      // échouer l'amorçage du CSPRNG d'OpenSSL de Node 24 — assertion
+      // « ncrypto::CSPRNG(nullptr, 0) » avant même la première ligne de JS.
       TEMP: sandbox,
       TMP: sandbox,
       PATH: `${winDir}\\system32;${winDir}`,
