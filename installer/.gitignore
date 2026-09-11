@@ -1,0 +1,6 @@
+# Artefacts de build — jamais versionnés.
+dist/
+output/
+runtime/
+leak-needles.operator.txt
+build.log
